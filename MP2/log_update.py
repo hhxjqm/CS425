@@ -13,4 +13,4 @@ def initialize_log_file(node_id, log_file_name):
     else:
         with open(log_file_name, 'w') as log_file:
             pass
-
+        log_membership_change(node_id, "joined", log_file_name)

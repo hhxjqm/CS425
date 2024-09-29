@@ -4,6 +4,8 @@ import re
 import os
 import argparse
 
+# python MP1/server.py /path/to/log/directory
+
 def execute_grep_on_logs(query, log_directory):
     """
     Executes a grep search on all .log files in the current directory and returns the results.

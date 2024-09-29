@@ -172,16 +172,15 @@ class GossipNode:
                                 version = self.membership_list[targetId]["version"]
                             with self.log_lock:
                                 log_membership_change(targetId, "failure", version, self.log_file)
-                        elif time_left <= 5:
-                            if time_left == 5:
-                                print(f"\n!!!!!!!{targetId} was suspected!!!!!!\n")
-                            record["time"] -= 1
+                        elif time_left == 5:
+                            print(f"\n!!!!!!!{targetId} was suspected!!!!!!\n")
                             with self.list_lock:
                                 self.membership_list[targetId]["status"] = "suspicion"
                                 self.membership_list[targetId]["timestamp"] = time.time()
                                 version = self.membership_list[targetId]["version"]
                             with self.log_lock:
                                 log_membership_change(targetId, "suspicion", version, self.log_file)
+                            record["time"] -= 1
                         else:
                             record["time"] -= 1
 
@@ -381,7 +380,7 @@ class GossipNode:
         with self.list_lock:
             for node_id, info in self.membership_list.items():
                 if info['status']:
-                    formatted_info = f"id: {node_id} - status: {info['status']} - time: {info['timestamp']}"
+                    formatted_info = f"id: {node_id} - version: {info['version']} - status: {info['status']} - time: {info['timestamp']}"
                     membership_info.append(formatted_info)
         membership_info.append("================================================")
         return "\n".join(membership_info)

@@ -10,7 +10,7 @@ from log_update import log_membership_change, initialize_log_file
 
 FAIL_WAIT_TIME = 5
 gossip_node_instance = None
-PORT = 9999
+PORT = 8888
 
 class GossipNode:
     def __init__(self, membership_file="MP2/membership_list.json"):
@@ -21,11 +21,14 @@ class GossipNode:
         self.membership_list = initialize_membership_list(self.node_ip, self.membership_file)
 
         self.known_nodes = [node_ip for node_ip in self.membership_list if node_ip != self.node_ip]
-        self.port = PORT
         self.running = True
         # self.known_nodes = {node_id: info for node_id, info in parsed_data.items() if node_id != self.node_id}
 
-        self.lock = threading.Lock()
+        self.list_lock = threading.Lock()
+        self.log_lock = threading.Lock()
+        self.known_lock = threading.Lock()
+        self.records_lock = threading.Lock()
+        self.socket_lock = threading.Lock()
 
         # Generate the log file name based on node ID
         self.log_file = "MP2/mp2.log"
@@ -49,7 +52,7 @@ class GossipNode:
 
     def start_server(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.server_socket.bind((self.node_ip, self.port))
+        self.server_socket.bind((self.node_ip, PORT))
 
         # print(f"Node {self.node_id} listening on {self.ip}:{self.port}")
         self.server_socket.settimeout(2)
@@ -70,20 +73,21 @@ class GossipNode:
     def gossip(self):
         while self.running == True:
             time.sleep(3)
-            if len(self.known_nodes) >= 3:
-                # Select 3 unique nodes to gossip with
-                target_nodes = random.sample(self.known_nodes, 3)
-            else:
-                # If less than 3 nodes, sample as many as possible without repeating
-                target_nodes = self.known_nodes
+            with self.known_lock:
+                if len(self.known_nodes) >= 3:
+                    # Select 3 unique nodes to gossip with
+                    target_nodes = random.sample(self.known_nodes, 3)
+                else:
+                    # If less than 3 nodes, sample as many as possible without repeating
+                    target_nodes = self.known_nodes
 
             for target_node in target_nodes:
                 self.send_gossip(target_node)
 
     def send_gossip(self, target_node):
-        with self.lock:
+        message = json.dumps({"type": "gossip", "membership_list": self.membership_list})
+        with self.socket_lock:
             # self.membership_list = load_membership_list(self.membership_file)
-            message = json.dumps({"type": "gossip", "membership_list": self.membership_list})
             gossip_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             gossip_socket.sendto(message.encode(), (target_node, PORT))
             gossip_socket.close()
@@ -92,22 +96,23 @@ class GossipNode:
     def ping(self):
         while self.running == True:
             time.sleep(2)
-            if self.known_nodes:
-                target_node = random.choice(self.known_nodes)
-                self.send_ping(target_node)
+            with self.known_lock:
+                if self.known_nodes:
+                    target_node = random.choice(self.known_nodes)
+                    self.send_ping(target_node)
 
     def send_ping(self, target_node):
         seq = self.get_seq()
         ping_message = json.dumps({"type": "ping", "seq": seq})
         # Get unique number
-        with self.lock:
+        with self.socket_lock:
             ping_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             ping_socket.sendto(ping_message.encode(), (target_node, PORT))
             ping_socket.close()
         # print(f"Ping sent from {self.node_id} to {target_node}")
 
         wait_second = FAIL_WAIT_TIME
-        with self.lock:
+        with self.records_lock:
             record_to_check = {
                 "target": target_node,
                 "seq": seq,
@@ -119,15 +124,17 @@ class GossipNode:
     def check_ping_status(self):
         while self.running == True:
             time.sleep(1)
-            with self.lock:
+            with self.records_lock:
                 for record in list(self.ping_records):
                     if record["time"] <= 0:
                         targetId = record["target"]
                         self.ping_records.remove(record)
                         # print(f"Node {record['target']} marked as failure.")
-                        self.membership_list[targetId]["status"] = "failure"
-                        self.membership_list[targetId]["timestamp"] = time.time()
-                        log_membership_change(targetId, "failure", self.log_file)
+                        with self.list_lock:
+                            self.membership_list[targetId]["status"] = "failure"
+                            self.membership_list[targetId]["timestamp"] = time.time()
+                        with self.log_lock:
+                            log_membership_change(targetId, "failure", self.log_file)
                     else:
                         record["time"] -= 1
     
@@ -146,39 +153,43 @@ class GossipNode:
     def process_ping(self, source_id, addr, port, seq):
         # print(f"Ping received by {self.node_id} from {source_id}")
         ack_message = json.dumps({"type": "ack", "source_id": self.node_ip, "seq": seq})
-        with self.lock:
+        with self.socket_lock:
             ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             ack_socket.sendto(ack_message.encode(), (addr, port))
             ack_socket.close()
 
         # Try ================================================================
-        self.membership_list[source_id] = {}
-        self.membership_list[source_id]["status"] = "alive"
-        self.membership_list[source_id]["timestamp"] = time.time()
-        log_membership_change(source_id, "ping", self.log_file)
+        self.membership_list[source_id] = {
+            "status": "alive",
+            "timestamp": time.time()
+        }
         # ====================================================================
 
     def process_ack(self, source_id, seq):
         # print(f"Ack received by {self.node_id} from {source_id}")
-        with self.lock:
+        with self.list_lock:
             self.membership_list[source_id]["status"] = "alive"
             self.membership_list[source_id]["timestamp"] = time.time()
-            for record in list(self.ping_records):
-                if record["target"] == source_id and record["seq"] == seq:
-                    self.ping_records.remove(record) 
-                    break
+            with self.records_lock:
+                for record in list(self.ping_records):
+                    if record["target"] == source_id and record["seq"] == seq:
+                        self.ping_records.remove(record) 
+                        break
+        with self.log_lock:
             log_membership_change(source_id, "ack - alive", self.log_file)
 
     def process_gossip(self, new_membership_list):
-        with self.lock:
+        with self.list_lock:
             # self.membership_list = load_membership_list(self.membership_file)
             for node_id, node_info in new_membership_list.items():
                 if node_id not in self.membership_list:
                     # If not, you can initialize it or handle it accordingly
                     self.membership_list[node_id] = node_info
                     if node_info["status"] == "alive":
-                        self.known_nodes.append(node_id)
-                        log_membership_change(node_id, "joined", self.log_file)
+                        with self.known_lock:
+                            self.known_nodes.append(node_id)
+                        with self.log_lock:
+                            log_membership_change(node_id, "joined", self.log_file)
                     continue  # Skip to the next node in new_membership_list
                 new_status = node_info["status"]
                 current_status = self.membership_list[node_id]["status"]
@@ -186,34 +197,38 @@ class GossipNode:
                     self.membership_list[node_id] = node_info
                     if new_status == "alive" and current_status != "alive":
                         if node_id not in self.known_nodes:
-                            self.known_nodes.append(node_id)
-                        log_membership_change(node_id, "joined", self.log_file)
+                            with self.known_lock:
+                                self.known_nodes.append(node_id)
+                        with self.log_lock:
+                            log_membership_change(node_id, "joined", self.log_file)
                     elif new_status != "alive" and current_status == "alive":
                         if node_id in self.known_nodes:
-                            self.known_nodes.remove(node_id)
-                        log_membership_change(node_id, new_status, self.log_file)
+                            with self.known_lock:
+                                self.known_nodes.remove(node_id)
+                        with self.log_lock:
+                            log_membership_change(node_id, new_status, self.log_file)
 
     def send_leave(self):
         self.running = False
         
-        with self.lock:
+        with self.list_lock:
             # Mark the node as 'leave' in its own membership list
             self.membership_list[self.node_ip]["status"] = "leave"
             self.membership_list[self.node_ip]["timestamp"] = time.time()
-            log_membership_change(self.node_ip, "leave", self.log_file)
+            with self.log_lock:
+                log_membership_change(self.node_ip, "leave", self.log_file)
             # print(f"Node {self.node_id} is leaving the cluster.")
             # Propagate the 'leave' status to other nodes
-        if len(self.known_nodes) >= 3:
-            # Select 3 unique nodes to gossip with
-            target_nodes = random.sample(self.known_nodes, 3)
-        else:
-            # If less than 3 nodes, sample as many as possible without repeating
-            target_nodes = self.known_nodes
+        with self.known_lock:
+            if len(self.known_nodes) >= 3:
+                # Select 3 unique nodes to gossip with
+                target_nodes = random.sample(self.known_nodes, 3)
+            else:
+                # If less than 3 nodes, sample as many as possible without repeating
+                target_nodes = self.known_nodes
         for target_node in target_nodes:
             self.send_gossip(target_node)
-            
         self.shutdown()
-        print("Check01")
         
     def shutdown(self):
         # Close the server socket

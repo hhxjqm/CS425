@@ -144,22 +144,22 @@ class GossipNode:
         if message["type"] == "gossip":
             self.process_gossip(message["membership_list"])
         elif message["type"] == "ping":
-            self.process_ping(message["source_id"], ip, port, message["seq"])
+            self.process_ping(ip, port, message["seq"])
         elif message["type"] == "ack":
-            self.process_ack(message["source_id"], message["seq"])
+            self.process_ack(ip, message["seq"])
         else:
             raise ValueError("Wrong type in process_message()")  
 
-    def process_ping(self, source_id, addr, port, seq):
+    def process_ping(self, ip, port, seq):
         # print(f"Ping received by {self.node_id} from {source_id}")
-        ack_message = json.dumps({"type": "ack", "source_id": self.node_ip, "seq": seq})
+        ack_message = json.dumps({"type": "ack", "seq": seq})
         with self.socket_lock:
             ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            ack_socket.sendto(ack_message.encode(), (addr, port))
+            ack_socket.sendto(ack_message.encode(), (ip, port))
             ack_socket.close()
 
         # Try ================================================================
-        self.membership_list[source_id] = {
+        self.membership_list[ip] = {
             "status": "alive",
             "timestamp": time.time()
         }

@@ -182,7 +182,7 @@ class GossipNode:
         with self.list_lock:
             # self.membership_list = load_membership_list(self.membership_file)
             for node_id, node_info in new_membership_list.items():
-                if node_id == self.ip:
+                if node_id == self.node_ip:
                     continue
                 if node_id not in self.membership_list:
                     # If not, you can initialize it or handle it accordingly

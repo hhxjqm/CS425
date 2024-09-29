@@ -6,11 +6,10 @@ def initialize_membership_list(local_ip, membership_file="MP2/membership_list.js
     if os.path.exists(membership_file):
         with open(membership_file, 'r') as f:
             membership_list = json.load(f)
-        if local_ip not in membership_list:
-            membership_list[local_ip] = {
-                "status": "alive",
-                "timestamp": time.time()
-            }
+        membership_list[local_ip] = {
+            "status": "alive",
+            "timestamp": time.time()
+        }
         return membership_list
     else:
         print(f"No membership file found at {membership_file}.")

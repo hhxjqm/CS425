@@ -152,6 +152,7 @@ class GossipNode:
             ack_socket.close()
 
         # Try ================================================================
+        self.membership_list[source_id] = {}
         self.membership_list[source_id]["status"] = "alive"
         self.membership_list[source_id]["timestamp"] = time.time()
         log_membership_change(source_id, "ping", self.log_file)

@@ -216,6 +216,7 @@ class GossipNode:
                     "status": "alive",
                     "timestamp": time.time()-86400,
                     "sus": self.sus,
+                    "sus_timestamp": time.time()-86400,
                     "version": 1
                 }
             else:
@@ -266,18 +267,14 @@ class GossipNode:
                     continue  # Skip to the next node in new_membership_list
                 current_version = self.membership_list[node_id]["version"]
                 current_status = self.membership_list[node_id]["status"]
-                current_time = self.membership_list[node_id]["time"]
-                new_time = node_info["time"]
-                self_time = self.membership_list[self.node_ip]["time"]
-                if node_info["sus"] and not self.sus and self_time < new_time:
-                    self.sus = True
+                current_time = self.membership_list[node_id]["timestamp"]
+                new_time = node_info["timestamp"]
+                current_sus_time = self.membership_list[self.node_ip]["sus_timestamp"]
+                new_sus_time = node_info["sus_timestamp"]
+                if node_info["sus"] and not self.sus and current_sus_time < new_sus_time:
                     self.enable_sus(self)
-                elif not node_info["sus"] and self.sus and self_time < new_time:
-                    self.sus = False
+                elif not node_info["sus"] and self.sus and current_sus_time < new_sus_time:
                     self.disable_sus(self)
-                    for _, info in self.membership_list.items():
-                        if info["status"] == "sus":
-                            info["status"] = "alive"
                 newest_time = max(current_time, new_time)
                 if current_version > new_version or (new_version == current_status and current_time > new_time):
                     break
@@ -368,6 +365,9 @@ class GossipNode:
     
     def enable_sus(self):
         self.sus = True
+        with self.list_lock:
+            self.membership_list[self.node_ip]["sus"] = True
+            self.membership_list[self.node_ip]["sus_timestamp"] = time.time()
         with self.records_lock:
             self.ping_records = []
 
@@ -375,9 +375,12 @@ class GossipNode:
         self.sus = False
         with self.sus_lock:
             self.sus_records = []
-        for key, value in self.membership_list.items():
-            if value.get('status') == "suspicion":
-                value['status'] = "alive"
+        with self.list_lock:
+            self.membership_list[self.node_ip]["sus"] = False
+            self.membership_list[self.node_ip]["sus_timestamp"] = time.time()
+            for key, value in self.membership_list.items():
+                if value.get('status') == "suspicion":
+                    value['status'] = "alive"
             
     def show_sus(self):
         sus_info = []

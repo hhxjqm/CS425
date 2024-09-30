@@ -3,6 +3,7 @@
         "status": "",
         "timestamp": 1695805623.12345,
         "sus": false,
+        "sus_timestamp": null,
         "version": 1
     }
 }

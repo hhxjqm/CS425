@@ -28,8 +28,11 @@ def send_query_to_server(server_ip, server_port, query):
                 break
             response += chunk
 
-        print(f"\nResults from {server_ip}:{server_port}:\n{response}")
+        # print(f"\nResults from {server_ip}:{server_port}:\n{response}")
 
+        log_filename = f"{server_ip}.log"
+        with open(log_filename, 'w') as log_file:
+            log_file.write(f"\nResults from {server_ip}:{server_port}:\n{response}\n")
         # Extract file name and total matches from the response
         # file_name = [line for line in response.split('\n') if line.startswith('File:')]
         # if file_name:

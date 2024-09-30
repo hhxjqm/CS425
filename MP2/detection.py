@@ -211,14 +211,16 @@ class GossipNode:
 
         with self.list_lock:
             if ip not in self.membership_list:
+                log_membership_change(ip, "joined", 1, self.log_file)
                 self.membership_list[ip] = {
                     "status": "alive",
-                    "timestamp": time.time(),
+                    "timestamp": time.time()-86400,
+                    "sus": self.sus,
                     "version": 1
                 }
             else:
                 self.membership_list[ip]["status"] = "alive"
-                self.membership_list[ip]["time"] = time.time()
+                # self.membership_list[ip]["time"] = time.time()
                 self.membership_list[ip]["version"] += 1
         with self.known_lock:
             self.known_nodes.add(ip)
@@ -266,6 +268,16 @@ class GossipNode:
                 current_status = self.membership_list[node_id]["status"]
                 current_time = self.membership_list[node_id]["time"]
                 new_time = node_info["time"]
+                self_time = self.membership_list[self.node_ip]["time"]
+                if node_info["sus"] and not self.sus and self_time < new_time:
+                    self.sus = True
+                    self.enable_sus(self)
+                elif not node_info["sus"] and self.sus and self_time < new_time:
+                    self.sus = False
+                    self.disable_sus(self)
+                    for _, info in self.membership_list.items():
+                        if info["status"] == "sus":
+                            info["status"] = "alive"
                 newest_time = max(current_time, new_time)
                 if current_version > new_version or (new_version == current_status and current_time > new_time):
                     break

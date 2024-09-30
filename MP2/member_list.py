@@ -10,6 +10,7 @@ def initialize_membership_list(local_ip, membership_file):
         membership_list[local_ip] = {
             "status": "alive",
             "timestamp": time.time(),
+            "sus": False,
             "version": 1
         }
         return membership_list

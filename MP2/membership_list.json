@@ -2,6 +2,7 @@
     "172.22.95.32": {
         "status": "",
         "timestamp": 1695805623.12345,
+        "sus": false,
         "version": 1
     }
 }

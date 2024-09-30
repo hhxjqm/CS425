@@ -37,5 +37,5 @@ Also update the `.env` file with the IP address and port number of your server.
 ## Unit test
 
 ```bash
-    python cs425_g87/MP1_Python/test.py
+    python MP1/test.py
 ```

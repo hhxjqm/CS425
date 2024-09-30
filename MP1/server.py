@@ -3,6 +3,7 @@ import subprocess
 import re
 import os
 import argparse
+import shlex 
 
 # python MP1/server.py /path/to/log/directory
 
@@ -16,25 +17,27 @@ def execute_grep_on_logs(query, log_directory):
     Returns:
         tuple: A string containing the results and an integer representing the total number of matches.
     """
-    # Get a list of all .log files in the current directory
-    # log_files = [f for f in os.listdir(log_directory) if f.endswith('.log')]
+    # Get a list of all .log files in the specified directory
     log_files = [os.path.join(log_directory, f) for f in os.listdir(log_directory) if f.endswith('.log')]
     result = ""
     total_matches = 0
 
-    # Process each log file
+    # Split the query into command and arguments
+    command_parts = shlex.split(query)
+
     for log_file in log_files:
-        # Construct the grep command
-        command = [query, log_file]
-        # command = [query, log_file]
+        command = command_parts + [log_file]
+        
+        print(command)
+        print(f"Executing command: {' '.join(command)}")
+        
         try:
-            # Execute the grep command and capture the output
             grep_result = subprocess.check_output(command, stderr=subprocess.STDOUT, universal_newlines=True)
             matches = grep_result.strip().split('\n')
 
-            # Check if any matches were found
+            # Check if any matches wer  e found
             if matches:
-                # result += f"\nFile: {log_file}\n"
+                result += f"File: {log_file}\n"
                 for match in matches:
                     # Format each match and append to the result
                     result += f"Line {match.split(':')[0]}: {match.split(':', 1)[1]}\n"
@@ -42,8 +45,10 @@ def execute_grep_on_logs(query, log_directory):
             else:
                 result += f"File: {log_file}\nNo matches found\n"
         except subprocess.CalledProcessError:
-            # Handle the case where no matches are found or another error occurs
             result += f"File: {log_file}\nNo matches found\n"
+        except Exception as e:
+            print(f"Command failed with error: {e}")
+            result += f"An error occurred while processing {log_file}: {str(e)}\n"
 
     return result, total_matches
 
@@ -83,7 +88,7 @@ def main():
     Main function to start the server, listen for client connections, and handle them.
     """
     parser = argparse.ArgumentParser(description='Start a log grep server.')
-    parser.add_argument('log_directory', type=str, help='Directory containing .log files')
+    parser.add_argument('--log_directory', type=str, default='MP2', help='Directory containing .log files')
     args = parser.parse_args()
     log_directory = args.log_directory
 

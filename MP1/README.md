@@ -9,8 +9,8 @@ This project implements a basic client-server architecture for querying log file
 
 ```bash
 project_root/
-├── cs425_g87/
-└── xxx.log   <-- Log file go here
+├── MP1/vm1.log
+└── MP2/vm1.log
 ```
 
 ## Prepare
@@ -28,10 +28,10 @@ Also update the `.env` file with the IP address and port number of your server.
 ## How to run
 
 ```bash
-    python cs425_g87/MP1_Python/server.py
+    python MP1/server.py /path/to/folder     #example: python MP1/server.py MP2
 ```
 ```bash
-    python cs425_g87/MP1_Python/client.py
+    python MP1/client.py
 ```
 
 ## Unit test
